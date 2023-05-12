@@ -1,0 +1,246 @@
+window.dataLayerArray = window.dataLayerArray || [];
+
+function getCookie(name){
+    var pattern = RegExp(name + "=.[^;]*")
+    var matched = document.cookie.match(pattern)
+    if(matched){
+        var cookie = matched[0].split('=')
+        return cookie[1]
+    }
+    return false
+}
+
+function getUserStatus() {
+    var userId = localStorage.getItem('userId');
+
+    return !!userId ? 'logged-in' : 'unauthenticated';
+}
+
+function parseUrlParamsFromHash(){
+    var url = window.location.hash.split("#")[1];
+
+    if (!url) return {};
+
+    url = url.split("?")[1];
+
+    if (!url) return {};
+
+    return url.split('&')
+        .reduce((result, param) => {
+            var [key, value] = param.split("=");
+            result[key] = decodeURIComponent(value);
+            return result;
+        }, {});
+}
+
+function getPageLoadMetric() {
+    var domain = window.location.hostname;
+    var campaignId = parseUrlParamsFromHash().cmpid;
+    var searchParams = new URLSearchParams(window.location.search);
+    var bbCandidateId = window.localStorage.getItem("bbCandidateId");
+    var cmpid = searchParams.has('cmpid') ? searchParams.get('cmpid') : campaignId ? campaignId : null;
+    const HVHPageName = document.head.querySelector(`meta[name="HVH-PageName"]`);
+    const pageName =  HVHPageName ? HVHPageName.getAttribute('content') : null;
+    const locale = getCookie("hvh-locale");
+    const UNSPECIFIED = 'unspecified';
+
+    var adobeMetric = {
+        event: 'page load',
+        page: {
+            name: pageName || 'career site landing',
+            path: window.location.pathname,
+            renderType: 'static',
+            application: 'CareerSite',
+            locale: locale || UNSPECIFIED
+        },
+        candidate: {
+            status: getUserStatus(),
+            bbCandidateId: !!bbCandidateId ? bbCandidateId : 'unspecified'
+        },
+        campaign: {}
+    };
+
+    if (cmpid) {
+        adobeMetric.campaign.cmpid = cmpid;
+    }
+
+    switch (domain) {
+        case 'beta.devo.jobsatamazon.hvh.a2z.com':
+            adobeMetric.environment = 'beta';
+            adobeMetric.countryCode = 'devo';
+            break;
+        case 'gamma.devo.jobsatamazon.hvh.a2z.com':
+            adobeMetric.environment = 'gamma';
+            adobeMetric.countryCode = 'devo';
+            break;
+        case 'uk.preprod.jobsatamazon.hvh.a2z.com':
+            adobeMetric.environment = 'preprod';
+            adobeMetric.countryCode = 'uk';
+            break;
+        case 'www.jobsatamazon.co.uk':
+            adobeMetric.environment = 'prod';
+            adobeMetric.countryCode = 'uk';
+            break;
+        case 'beta-us.devo.jobsatamazon.hvh.a2z.com':
+            adobeMetric.environment = 'beta';
+            adobeMetric.countryCode = 'us';
+            break;
+        case 'gamma-us.devo.jobsatamazon.hvh.a2z.com':
+            adobeMetric.environment = 'gamma';
+            adobeMetric.countryCode = 'us';
+            break;
+        case 'us.preprod.jobsatamazon.hvh.a2z.com':
+            adobeMetric.environment = 'preprod';
+            adobeMetric.countryCode = 'us';
+            break;
+        case 'hiring.amazon.com':
+            adobeMetric.environment = 'prod';
+            adobeMetric.countryCode = 'us';
+            break;
+        case 'beta-mx.devo.jobsatamazon.hvh.a2z.com':
+            adobeMetric.environment = 'beta';
+            adobeMetric.countryCode = 'mx';
+            break;
+        case 'gamma-mx.devo.jobsatamazon.hvh.a2z.com':
+            adobeMetric.environment = 'gamma';
+            adobeMetric.countryCode = 'mx';
+            break;
+        case 'mx.preprod.jobsatamazon.hvh.a2z.com':
+            adobeMetric.environment = 'preprod';
+            adobeMetric.countryCode = 'mx';
+            break;
+        case 'trabaja.amazon.com.mx':
+            adobeMetric.environment = 'prod';
+            adobeMetric.countryCode = 'mx';
+            break;
+        case 'beta-ca.devo.jobsatamazon.hvh.a2z.com':
+            adobeMetric.environment = 'beta';
+            adobeMetric.countryCode = 'ca';
+            break;
+        case 'gamma-ca.devo.jobsatamazon.hvh.a2z.com':
+            adobeMetric.environment = 'gamma';
+            adobeMetric.countryCode = 'ca';
+            break;
+        case 'ca.preprod.jobsatamazon.hvh.a2z.com':
+            adobeMetric.environment = 'preprod';
+            adobeMetric.countryCode = 'ca';
+            break;
+        case 'hiring.amazon.ca':
+            adobeMetric.environment = 'prod';
+            adobeMetric.countryCode = 'ca';
+            break;
+        default:
+            adobeMetric.environment = 'devo';
+            adobeMetric.countryCode = 'uk';
+    }
+
+    return adobeMetric;
+}
+
+var sendPageLoadEvent = function() {
+    window.dataLayerArray.push(getPageLoadMetric());
+};
+
+function emitAdobeEvent() {
+    const HYBRID_PAGE = ['/contact-us'];
+
+    if (!HYBRID_PAGE.includes(window.location.pathname)){
+        sendPageLoadEvent();
+    }
+}
+
+function observeStaticLink(target) {
+
+    // Get all Leo links to be lazily loaded.
+    const lazyLegoLinks = [
+        ...[].slice.call(target ? target : document.querySelectorAll('div.hvhcareer div a')),
+    ];
+
+    const options = {
+        target: document.body,
+        rootMargin: '100px 0px 100px 0px',
+        threshold: 0 // run callback as soon as any pixel of target is visible
+    };
+
+    const callback = (entries, observer) => {
+        // For each hvhcareer link (button), append cmpid if it exists in the current url.
+        const campaignId = parseUrlParamsFromHash().cmpid;
+        const searchParams = new URLSearchParams(window.location.search);
+        const cmpid = searchParams.has('cmpid') ? searchParams.get('cmpid') : campaignId ? campaignId : undefined;
+
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const lazyLegoLink = entry.target;
+                const initURL = lazyLegoLink.href;
+                const hrefAttribute = lazyLegoLink.getAttribute("href");
+
+                //Should be a relative path and doesn't have /app# for dynamic path. exclude bb links, ash and selfService
+                const localeRegex = new RegExp("^(?!www\\.|(?:http|ftp)s?:\\/\\/|[A-Za-z]:\\\\|\\/\\/|(\\/app#)|(\\/selfservice\\/)|(\\/checklist\\/)|(\\/application\\/)).*");
+                const regex = new RegExp("^/([a-z]{2}-[A-Z]{2})(/.*)?$");
+                const pathLocaleRegex = new RegExp("^/([a-z]{2}-[A-Z]{2})");
+
+                try {
+                    const newURL = new URL(initURL);
+                    const pathName = newURL.pathname;
+                    const locale = getCookie("hvh-locale");
+                    const defaultLocale = getCookie("hvh-default-locale");
+
+                    if(cmpid) {
+                        newURL.searchParams.set('cmpid', cmpid);
+                    }
+
+                    if(localeRegex.test(hrefAttribute) && locale && defaultLocale && defaultLocale !== locale) {
+                        //when using anchor like <a href="#anchor"/>, after switching locale, lazyLegoLink.href will contain current locale from url.
+                        //Therefore, adding logic to check if pathname already have locale and replace with locale// from cookie instead of appending a new locale
+                        if(regex.test(newURL.pathname)) {
+                            const newLocale = defaultLocale === option.locale ? "" : `/${option.locale}`;
+                            newURL.pathname = pathname.replace(pathLocaleRegex, newLocale);
+                        }
+                        else {
+                            newURL.pathname = `/${locale}`.concat(pathName);
+                        }
+                    }
+
+                    lazyLegoLink.setAttribute('href', newURL.toString());
+
+                } catch (e) {
+                    // Do nothing
+                    console.error("Failed action", e);
+                }
+
+                observer.unobserve(lazyLegoLink);
+            }
+        });
+    };
+
+    const observer = new IntersectionObserver(callback, options);
+
+    lazyLegoLinks.forEach((lazyLegoLink) => {
+        observer.observe(lazyLegoLink);
+    });
+}
+
+//If readyState is not loading that means DOM is ready we can access dom elements.
+if(document.readyState !== 'loading') {
+    //Emit adobe events
+    emitAdobeEvent();
+    observeStaticLink();
+}
+//The document is still loading. still possible for DOMContentLoaded to be fired
+else {
+    document.addEventListener('DOMContentLoaded ', function() {
+        //Emit adobe events
+        emitAdobeEvent();
+        observeStaticLink();
+    });
+}
+
+//listen to footer loaded event and add locale to links in the footer
+document.addEventListener('footerLoaded', (e) => {
+    try{
+        observeStaticLink(e.detail.target);
+    }
+    catch ( e ) {
+        console.error('Failed', e);
+    }
+})
